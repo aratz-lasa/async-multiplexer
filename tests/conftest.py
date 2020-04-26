@@ -26,6 +26,6 @@ def get_tcp_connection_mock() -> Tuple[MagicMock, MagicMock]:
 def get_protocol_mock() -> MagicMock:
     protocol_mock = MagicMock(spec_set=MplexProtocol)
     protocol_mock.read_message.return_value = MplexMessage(
-        stream_id=0, flag=MplexFlag.MESSAGE_RECEIVER, data=b""
+        stream_id=0, flag=MplexFlag.MESSAGE, data=b""
     )  # generic data
     return protocol_mock

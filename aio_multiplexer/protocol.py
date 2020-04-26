@@ -13,12 +13,8 @@ StreamData = bytes
 
 class MplexFlag(IntEnum):
     NEW_STREAM = 0
-    MESSAGE_RECEIVER = 1
-    MESSAGE_INITIATOR = 2
-    CLOSE_RECEIVER = 3
-    CLOSE_INITIATOR = 4
-    RESET_RECEIVER = 5
-    RESET_INITIATOR = 6
+    MESSAGE = 1
+    CLOSE = 2
 
 
 @dataclass
