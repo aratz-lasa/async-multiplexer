@@ -6,7 +6,7 @@ from hypothesis.strategies import binary, sampled_from, integers, tuples, lists
 
 from aio_multiplexer.protocol import MplexFlag, MplexMessage, StreamData, StreamID
 from aio_multiplexer.protocol import MplexProtocol
-from tests.conftest import get_tcp_connection_mock
+from tests.utils import get_connection_mock
 
 # All test coroutines will be treated as marked.
 pytestmark = pytest.mark.asyncio
@@ -19,7 +19,7 @@ def test_flags():
 
 
 def test_create_mplex_protocol():
-    mplex_protocol = MplexProtocol(*get_tcp_connection_mock())
+    mplex_protocol = MplexProtocol(*get_connection_mock("127.0.0.1", 7777))
     assert isinstance(mplex_protocol, MplexProtocol)
 
 
@@ -27,7 +27,7 @@ def test_create_mplex_protocol():
     fragmented_message=tuples(integers(min_value=0), sampled_from(MplexFlag), binary())
 )
 async def test_read_message(fragmented_message: Tuple[StreamID, MplexFlag, StreamData]):
-    reader_mock, writer_mock = get_tcp_connection_mock()
+    reader_mock, writer_mock = get_connection_mock("127.0.0.1", 7777)
     stream_id, flag, data = fragmented_message
 
     mplex_protocol = MplexProtocol(reader_mock, writer_mock)
@@ -50,7 +50,7 @@ async def test_read_message(fragmented_message: Tuple[StreamID, MplexFlag, Strea
 async def test_read_multiple_messages(
     fragmented_messages: List[Tuple[StreamID, MplexFlag, StreamData]]
 ):
-    reader_mock, writer_mock = get_tcp_connection_mock()
+    reader_mock, writer_mock = get_connection_mock("127.0.0.1", 7777)
     for stream_id, flag, data in fragmented_messages:
         encoded_message = (
             uvarint.encode(stream_id << 3 | flag) + uvarint.encode(len(data)) + data
@@ -72,7 +72,7 @@ async def test_read_multiple_messages(
 async def test_write_message(
     fragmented_message: Tuple[StreamID, MplexFlag, StreamData]
 ):
-    reader_mock, writer_mock = get_tcp_connection_mock()
+    reader_mock, writer_mock = get_connection_mock("127.0.0.1", 7777)
     stream_id, flag, data = fragmented_message
 
     mplex_protocol = MplexProtocol(reader_mock, writer_mock)

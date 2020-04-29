@@ -1,4 +1,6 @@
-from typing import Callable
+from dataclasses import dataclass
+import math
+from typing import Callable, Tuple, Awaitable
 from contextlib import asynccontextmanager
 import asyncio
 from asyncio import StreamWriter, StreamReader
@@ -17,13 +19,24 @@ Port = int
 StreamName = str
 
 
-async def open_tcp_multiplexer(ip: IP, port: Port):
+@dataclass(order=True, frozen=True, unsafe_hash=True)
+class SocketAddress:
+    ip: IP
+    port: Port
+
+
+@dataclass(order=True, frozen=True, unsafe_hash=True)
+class StreamAddress(SocketAddress):
+    name: StreamName
+
+
+async def open_multiplexer(ip: IP, port: Port):
     reader, writer = await asyncio.open_connection(ip, port)
     return Multiplexer(reader, writer)
 
 
 @asynccontextmanager
-async def open_tcp_multiplexer_context(ip: IP, port: Port):
+async def open_multiplexer_context(ip: IP, port: Port):
     reader, writer = await asyncio.open_connection(ip, port)
     multiplexer = Multiplexer(reader, writer)
     try:
@@ -35,19 +48,31 @@ async def open_tcp_multiplexer_context(ip: IP, port: Port):
 class Stream:
     def __init__(
         self,
-        stream_name: StreamName,
+        stream_address: StreamAddress,
         protocol: MplexProtocol,
         read_queue: asyncio.Queue,
         cleanup_callback: Callable[[], None],
     ):
+        self._address = stream_address
         self._protocol = protocol
-        self._stream_name = stream_name
-        self._stream_id = _get_stream_id_from_name(stream_name)
+        self._stream_id = _get_stream_id_from_name(stream_address.name)
         self._buffer = bytearray()
         self._read_queue = read_queue
         self._cleanup_callbak = cleanup_callback
         self._closed = False
         self._buffer_fill_tasks = []
+
+    @property
+    def ip(self):
+        return self._address.ip
+
+    @property
+    def port(self):
+        return self._address.port
+
+    @property
+    def name(self):
+        return self._address.name
 
     async def close(self):
         if self._closed:
@@ -55,7 +80,7 @@ class Stream:
         message = MplexMessage(
             stream_id=self._stream_id,
             flag=MplexFlag.CLOSE,
-            data=self._stream_name.encode(),
+            data=self._address.name.encode(),
         )
         await self._protocol.write_message(message)
         self._cleanup_callbak()
@@ -71,46 +96,101 @@ class Stream:
         )
         await self._protocol.write_message(message)
 
-    async def read(self, bytes_amount: int) -> bytes:
+    async def read(self, bytes_amount: int = -1) -> bytes:
         if self._closed:
             raise RuntimeError("Stream closed")
+        if not isinstance(bytes_amount, int) or bytes_amount < -1:
+            raise ValueError("Invalid bytes amount")
         if bytes_amount == 0:
             return b""
+        fill_amount = math.inf if bytes_amount == -1 else bytes_amount
+        buffer_fill_task = asyncio.create_task(self._fill_buffer(fill_amount))
+        self._buffer_fill_tasks.append(buffer_fill_task)
         try:
-            buffer_fill_task = asyncio.create_task(self._fill_buffer(bytes_amount))
-            self._buffer_fill_tasks.append(buffer_fill_task)
             await buffer_fill_task
         except asyncio.CancelledError:
+            if bytes_amount == -1:
+                return self._buffer
             raise RuntimeError("Stream closed")
         read_byte = self._buffer[:bytes_amount]
         self._buffer = self._buffer[bytes_amount:]
         return read_byte
 
-    async def _fill_buffer(self, fill_limit: int):
-        while len(self._buffer) < fill_limit:
+    async def _fill_buffer(self, fill_amount: int):
+        while len(self._buffer) < fill_amount:
             self._buffer.extend(await self._read_queue.get())
+
+
+Handler = Callable[[Stream], Awaitable[None]]
 
 
 class Multiplexer:
     def __init__(self, reader: StreamReader, writer: StreamWriter):
+        self._address = SocketAddress(*writer.get_extra_info("peername"))
         self._writer = writer
         self._protocol = MplexProtocol(reader, writer)
         self._stream_names = set()
         self._stream_queues = {}
         self._streams = {}
+        self._handlers = {}
         self._read_messages_task = asyncio.create_task(self._read_messages_loop())
+        self._closed = False
+
+    @property
+    def ip(self):
+        return self._address.ip
+
+    @property
+    def port(self):
+        return self._address.port
 
     async def close(self):
+        if self._closed:
+            raise RuntimeError("Multiplexer closed")
         await _stop_task(self._read_messages_task)
+        for stream in list(self._streams.values()):
+            await stream.close()
         self._writer.write_eof()
         await self._writer.wait_closed()
+        self._closed = True
 
     async def multiplex(self, stream_name: StreamName) -> Stream:
+        if self._closed:
+            raise RuntimeError("Multiplexer closed")
         if stream_name == "":
             raise ValueError("Invalid empty stream name")
         if stream_name in self._stream_names:
             raise ValueError("Stream already oppened")
+        return await self._make_new_stream(stream_name)
 
+    def set_handler(self, stream_name: StreamName, handler: Handler):
+        self._handlers[stream_name] = handler
+
+    def remove_handler(self, stream_name: StreamName):
+        if stream_name not in self._handlers:
+            raise KeyError("Handler does not exist")
+        del self._handlers[stream_name]
+
+    async def _read_messages_loop(self):
+        while True:
+            await asyncio.sleep(0)  # just in case this loop becomes synchronous
+            try:
+                message = await self._protocol.read_message()
+            except ValueError:
+                continue
+            if message.flag == MplexFlag.NEW_STREAM:
+                stream_name = message.data.decode()
+                if stream_name in self._handlers:
+                    stream = await self._make_new_stream(stream_name)
+                    asyncio.create_task(self._handlers[stream_name](stream))
+            elif message.stream_id not in self._stream_queues:
+                continue
+            elif message.flag == MplexFlag.MESSAGE:
+                self._stream_queues[message.stream_id].put_nowait(message.data)
+            elif message.flag == MplexFlag.CLOSE:
+                asyncio.create_task(self._streams[message.stream_id].close())
+
+    async def _make_new_stream(self, stream_name: StreamName):
         stream_id = _get_stream_id_from_name(stream_name)
         message = MplexMessage(
             stream_id=stream_id, flag=MplexFlag.NEW_STREAM, data=stream_name.encode()
@@ -127,28 +207,13 @@ class Multiplexer:
             del self._streams[stream_id]
 
         stream = Stream(
-            stream_name=stream_name,
+            stream_address=StreamAddress(self.ip, self.port, stream_name),
             protocol=self._protocol,
             read_queue=read_queue,
             cleanup_callback=cleanup_callback,
         )
         self._streams[stream_id] = stream
         return stream
-
-    async def _read_messages_loop(self):
-        while True:
-            message = await self._protocol.read_message()
-            if (
-                message.flag == MplexFlag.MESSAGE
-                and message.stream_id in self._stream_queues
-            ):  # todo: else raise error?
-                self._stream_queues[message.stream_id].put_nowait(message.data)
-            elif (
-                message.flag == MplexFlag.CLOSE
-                and message.stream_id in self._stream_queues
-            ):  # todo: else raise error?
-                asyncio.create_task(self._streams[message.stream_id].close())
-            await asyncio.sleep(0)  # just in case this loop becomes synchronous
 
 
 def _get_stream_id_from_name(stream_name: StreamName) -> StreamID:
