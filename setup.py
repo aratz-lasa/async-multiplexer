@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="async_multiplexer",
-    version="0.0.1",
+    version="0.0.2",
     author="Aratz M. Lasa",
     author_email="aratz.m.lasa@gmail.com",
     description="Asyncio TCP Multiplexer",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/aratz-lasa/aio-multiplexer",
+    url="https://github.com/aratz-lasa/async-multiplexer",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
