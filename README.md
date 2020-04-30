@@ -9,6 +9,10 @@ TCP Multiplexer based on [Mplex](https://github.com/libp2p/specs/tree/master/mpl
 It is intended for creating mutiple streams in parallel
 on top of a same TCP connection.
 
+## Dependencies
+The needed third-party libraries are:
+- uvarint==1.2.0 
+
 ## Usage
 
 ### Client
