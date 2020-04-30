@@ -1,0 +1,17 @@
+language: python
+python:
+  - "3.8"
+dist: bionic
+# command to install dependencies
+install:
+  - pip install --upgrade pip
+  - pip install -e '.[dev]'
+  - pip install codecov
+  - pip install pytest-cov
+# command to run tests
+script:
+  - pytest -svvv --cov-report term --cov=async_multiplexer tests
+
+after_script:
+  # Upload coverage report to 'Codecov'
+  - codecov --token=66a49521-4cad-460d-aa7e-aa79b8b95ede
