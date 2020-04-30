@@ -11,7 +11,7 @@ on top of a same TCP connection.
 
 ## Installation
 ```bash
-pip install async_multiplexer
+pip install async-multiplexer
 ``` 
 
 ## Usage
