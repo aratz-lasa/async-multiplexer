@@ -4,8 +4,8 @@ import uvarint
 from hypothesis import given
 from hypothesis.strategies import binary, sampled_from, integers, tuples, lists
 
-from aio_multiplexer.protocol import MplexFlag, MplexMessage, StreamData, StreamID
-from aio_multiplexer.protocol import MplexProtocol
+from async_multiplexer.protocol import MplexFlag, MplexMessage, StreamData, StreamID
+from async_multiplexer.protocol import MplexProtocol
 from tests.utils import get_connection_mock
 
 # All test coroutines will be treated as marked.

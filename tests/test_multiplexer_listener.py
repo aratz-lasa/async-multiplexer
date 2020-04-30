@@ -5,13 +5,13 @@ import asyncio
 from asyncio.events import AbstractServer as AsyncioServer
 from unittest.mock import patch, MagicMock, AsyncMock, ANY
 import pytest
-from aio_multiplexer import (
+from async_multiplexer import (
     bind_multiplex_listener,
     bind_multiplex_listener_context,
 )
-from aio_multiplexer.protocol import MplexFlag
-from aio_multiplexer.multiplexer import Stream, StreamName
-from aio_multiplexer.multiplex_listener import MultiplexListener
+from async_multiplexer.protocol import MplexFlag
+from async_multiplexer.multiplexer import Stream, StreamName
+from async_multiplexer.multiplex_listener import MultiplexListener
 from tests.utils import get_connection_mock, get_encoded_message
 
 # All test coroutines will be treated as marked.

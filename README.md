@@ -1,24 +1,25 @@
-# AioMultiplexer
+# async_multiplexer
+[![PyPI version](https://badge.fury.io/py/async-multiplexer.svg)](https://badge.fury.io/py/async-multiplexer)
 [![Python 3.7](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/downloads/release/python-370/)
 [![PEP8](https://img.shields.io/badge/code%20style-pep8-orange.svg)](https://www.python.org/dev/peps/pep-0008/)
 [![black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
-
-TCP Multiplexer based on [Mplex](https://github.com/libp2p/specs/tree/master/mplex) protocol, but simplified.
+**async_multiplexer** is a TCP Multiplexer based on [Mplex](https://github.com/libp2p/specs/tree/master/mplex) protocol, but simplified.
 It is intended for creating mutiple streams in parallel
 on top of a same TCP connection.
 
-## Dependencies
-The needed third-party libraries are:
-- uvarint==1.2.0 
+## Installation
+```bash
+pip install async_multiplexer
+``` 
 
 ## Usage
 
 ### Client
 ```python
 import asyncio
-from aio_multiplexer import open_multiplexer_context
+from async_multiplexer import open_multiplexer_context
 
 async def echo_client():
     async with open_multiplexer_context("127.0.0.1", 7777) as multiplexer:
@@ -35,7 +36,7 @@ if __name__ == "__main__":
 ### Server
 ```python
 import asyncio
-from aio_multiplexer import bind_multiplex_listener_context
+from async_multiplexer import bind_multiplex_listener_context
 
 async def handler(stream):
     data = await stream.read()

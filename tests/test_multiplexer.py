@@ -8,9 +8,9 @@ import pytest
 from hypothesis import given
 from hypothesis.strategies import text, binary, lists, floats, integers, one_of
 
-from aio_multiplexer import open_multiplexer, open_multiplexer_context
-from aio_multiplexer.multiplexer import Multiplexer, Stream, StreamName, StreamData
-from aio_multiplexer.protocol import MplexFlag
+from async_multiplexer import open_multiplexer, open_multiplexer_context
+from async_multiplexer.multiplexer import Multiplexer, Stream, StreamName, StreamData
+from async_multiplexer.protocol import MplexFlag
 
 # All test coroutines will be treated as marked.
 from tests.utils import get_encoded_message, get_connection_mock

@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 
 import uvarint
 
-from aio_multiplexer.multiplexer import StreamName
-from aio_multiplexer.protocol import (
+from async_multiplexer.multiplexer import StreamName
+from async_multiplexer.protocol import (
     StreamID,
     MplexFlag,
     StreamData,

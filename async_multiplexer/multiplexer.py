@@ -6,7 +6,7 @@ import asyncio
 from asyncio import StreamWriter, StreamReader
 from hashlib import sha256
 
-from aio_multiplexer.protocol import (
+from async_multiplexer.protocol import (
     MplexFlag,
     MplexProtocol,
     MplexMessage,

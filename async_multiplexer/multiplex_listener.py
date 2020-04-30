@@ -1,6 +1,6 @@
 from typing import List, Dict
 from asyncio import StreamReader, StreamWriter
-from aio_multiplexer.multiplexer import IP, Port, Multiplexer, StreamName, Handler
+from async_multiplexer.multiplexer import IP, Port, Multiplexer, StreamName, Handler
 from contextlib import asynccontextmanager
 import asyncio
 from asyncio.events import AbstractServer
