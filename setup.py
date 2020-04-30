@@ -8,7 +8,12 @@ install_requires = [
 ]
 
 extras_require = {
-    "dev": ["pytest==5.4.1", "pytest-asyncio==0.11.0", "hypothesis==5.10.4", "hypothesis-pytest==0.19.0"],
+    "dev": [
+        "pytest==5.4.1",
+        "pytest-asyncio==0.11.0",
+        "hypothesis==5.10.4",
+        "hypothesis-pytest==0.19.0",
+    ],
 }
 
 setuptools.setup(
@@ -28,5 +33,5 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.8',
+    python_requires=">=3.8",
 )

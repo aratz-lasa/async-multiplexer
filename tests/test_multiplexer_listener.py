@@ -112,6 +112,7 @@ async def test_handle_streams(remote_address, stream_names):
         async with bind_multiplex_listener_context(
             "127.0.0.1", 7777
         ) as multiplex_listener:
+            # First set handler, then open connection
             for stream_name in stream_names:
                 multiplex_listener.set_handler(
                     stream_name, partial(handler, stream_name)
@@ -121,6 +122,43 @@ async def test_handle_streams(remote_address, stream_names):
                 reader_mock, writer_mock = remote_conn_mock.new_mock_connection(
                     remote_ip, remote_port
                 )
+                encoded_message = get_encoded_message(
+                    stream_name, MplexFlag.NEW_STREAM, stream_name.encode()
+                )
+                reader_mock.feed_data(encoded_message)
+
+                await asyncio.wait_for(handled_events[stream_name].wait(), timeout=0.01)
+
+
+@given(
+    remote_address=tuples(ip_addresses(), integers(min_value=0, max_value=65535)),
+    stream_names=lists(text(min_size=1), unique=True),
+)
+async def test_handle_streams_after_connected(remote_address, stream_names):
+    remote_ip, remote_port = remote_address
+    handled_events = {name: asyncio.Event() for name in stream_names}
+
+    async def handler(stream_name: StreamName, stream: Stream):
+        assert stream.name == stream_name
+        assert stream.ip == remote_ip
+        assert stream.port == remote_port
+        handled_events[stream_name].set()
+
+    start_server_mock, server_mock, remote_conn_mock = get_start_sever_mock()
+    with patch("asyncio.start_server", start_server_mock):
+        async with bind_multiplex_listener_context(
+            "127.0.0.1", 7777
+        ) as multiplex_listener:
+            # First open connection, then set handler
+            for stream_name in stream_names:
+                reader_mock, writer_mock = remote_conn_mock.new_mock_connection(
+                    remote_ip, remote_port
+                )
+                await asyncio.sleep(0)
+                for stream_name in stream_names:
+                    multiplex_listener.set_handler(
+                        stream_name, partial(handler, stream_name)
+                    )
                 encoded_message = get_encoded_message(
                     stream_name, MplexFlag.NEW_STREAM, stream_name.encode()
                 )

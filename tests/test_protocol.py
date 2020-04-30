@@ -4,7 +4,13 @@ import uvarint
 from hypothesis import given
 from hypothesis.strategies import binary, sampled_from, integers, tuples, lists
 
-from async_multiplexer.protocol import MplexFlag, MplexMessage, StreamData, StreamID
+from async_multiplexer.protocol import (
+    MplexFlag,
+    MplexMessage,
+    StreamData,
+    StreamID,
+    LIMIT as UVARINT_MAX_BYTES,
+)
 from async_multiplexer.protocol import MplexProtocol
 from tests.utils import get_connection_mock
 
@@ -85,3 +91,15 @@ async def test_write_message(
 
     writer_mock.write.assert_called_with(encoded_message)
     writer_mock.drain.assert_awaited()
+
+
+async def test_read_uvarint_overflow():
+    uvarint_overflow = bytearray([0b10000000 for _ in range(UVARINT_MAX_BYTES + 1)])
+    reader_mock, writer_mock = get_connection_mock("127.0.0.1", 7777)
+    stream_id, flag = 12, MplexFlag.NEW_STREAM
+    encoded_message = uvarint.encode(stream_id << 3 | flag) + uvarint_overflow
+    reader_mock.feed_data(encoded_message)
+
+    mplex_protocol = MplexProtocol(reader_mock, writer_mock)
+    with pytest.raises(OverflowError):
+        message = await mplex_protocol.read_message()
