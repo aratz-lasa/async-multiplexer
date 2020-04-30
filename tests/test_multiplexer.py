@@ -66,6 +66,7 @@ async def test_multiplex_one(stream_name: StreamName):
             assert stream.ip == ip
             assert stream.port == port
             assert stream.name == stream_name
+            assert not stream.is_closed()
 
             encoded_message = get_encoded_message(
                 stream_name, MplexFlag.NEW_STREAM, stream_name.encode()
@@ -86,6 +87,7 @@ async def test_multiplex_n(stream_names: List[StreamName]):
                 assert stream.ip == ip
                 assert stream.port == port
                 assert stream.name == stream_name
+                assert not stream.is_closed()
 
                 encoded_message = get_encoded_message(
                     stream_name, MplexFlag.NEW_STREAM, stream_name.encode()
@@ -127,10 +129,12 @@ async def test_close_stream(mock: AsyncMock):
         stream_name = "stream.1"
         stream = await multiplexer.multiplex(stream_name)
         await stream.close()
+
         encoded_message = get_encoded_message(
             stream_name, MplexFlag.CLOSE, stream_name.encode()
         )
         writer_mock.write.assert_called_with(encoded_message)
+        assert stream.is_closed()
 
         with pytest.raises(RuntimeError):
             await stream.close()
@@ -255,9 +259,7 @@ async def test_read_invalid_flag():
             stream_name = "stream.1"
             stream = await multiplexer.multiplex(stream_name)
 
-            encoded_message = get_encoded_message(
-                stream_name, 4, b"data"
-            )
+            encoded_message = get_encoded_message(stream_name, 4, b"data")
             reader_mock.feed_data(encoded_message)
 
             with pytest.raises(asyncio.TimeoutError):
@@ -328,15 +330,18 @@ async def test_close_from_multiplexer():
         with pytest.raises(RuntimeError):
             await stream.close()
 
+
 @given(stream_names=lists(text(min_size=1), unique=True))
 async def test_handle_new_stream(stream_names):
     ip, port = ("127.0.0.1", 7777)
     handled_events = {name: asyncio.Event() for name in stream_names}
+
     async def handler(stream_name: StreamName, stream: Stream):
         assert stream.name == stream_name
         assert stream.ip == ip
         assert stream.port == port
         handled_events[stream_name].set()
+
     reader_mock, writer_mock = get_connection_mock(ip, port)
     with patch("asyncio.open_connection", return_value=(reader_mock, writer_mock)):
         async with open_multiplexer_context(ip, port) as multiplexer:
@@ -344,15 +349,19 @@ async def test_handle_new_stream(stream_names):
                 multiplexer.set_handler(stream_name, partial(handler, stream_name))
 
             for stream_name in stream_names:
-                encoded_message = get_encoded_message(stream_name, MplexFlag.NEW_STREAM, stream_name.encode())
+                encoded_message = get_encoded_message(
+                    stream_name, MplexFlag.NEW_STREAM, stream_name.encode()
+                )
                 reader_mock.feed_data(encoded_message)
 
                 await asyncio.wait_for(handled_events[stream_name].wait(), timeout=0.01)
+
 
 async def test_remove_handler():
     ip, port = ("127.0.0.1", 7777)
     stream_name = "stream.1"
     handled_event = asyncio.Event()
+
     async def handler(stream: Stream):
         assert stream.name == stream_name
         assert stream.ip == ip
@@ -365,7 +374,9 @@ async def test_remove_handler():
             multiplexer.set_handler(stream_name, handler)
             multiplexer.remove_handler(stream_name)
 
-            encoded_message = get_encoded_message(stream_name, MplexFlag.NEW_STREAM, stream_name.encode())
+            encoded_message = get_encoded_message(
+                stream_name, MplexFlag.NEW_STREAM, stream_name.encode()
+            )
             reader_mock.feed_data(encoded_message)
 
             with pytest.raises(asyncio.TimeoutError):

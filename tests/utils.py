@@ -6,7 +6,13 @@ from unittest.mock import MagicMock
 import uvarint
 
 from aio_multiplexer.multiplexer import StreamName
-from aio_multiplexer.protocol import StreamID, MplexFlag, StreamData, MplexMessage, MplexProtocol
+from aio_multiplexer.protocol import (
+    StreamID,
+    MplexFlag,
+    StreamData,
+    MplexMessage,
+    MplexProtocol,
+)
 
 
 def get_stream_id_from_name(stream_name: StreamName) -> StreamID:

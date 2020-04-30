@@ -53,12 +53,12 @@ async def test_bind_multiplex_listener():
         start_server_mock.assert_awaited_with(ANY, ip, port)
 
 
-async def test_close_multiplex_listener():
+async def test_unbind_multiplex_listener():
     start_server_mock, server_mock, remote_conn_mock = get_start_sever_mock()
     with patch("asyncio.start_server", start_server_mock):
         multiplex_listener = await bind_multiplex_listener("127.0.0.1", 7777)
 
-        await multiplex_listener.stop()
+        await multiplex_listener.unbind()
         server_mock.close.assert_called()
         server_mock.wait_closed.assert_awaited()
 
@@ -73,10 +73,34 @@ async def test_bind_multiplexer_context():
         server_mock.close.assert_called()
         server_mock.wait_closed.assert_awaited()
 
-@given(remote_address=tuples(ip_addresses(),integers(min_value=0, max_value=65535)), stream_names=lists(text(min_size=1), unique=True))
+
+async def test_bind_twice():
+    start_server_mock, server_mock, remote_conn_mock = get_start_sever_mock()
+    ip, port = ("127.0.0.1", 7777)
+    with patch("asyncio.start_server", start_server_mock):
+        multiplex_listener = await bind_multiplex_listener(ip, port)
+        with pytest.raises(RuntimeError):
+            await multiplex_listener.bind(ip, port)
+
+
+async def test_unbind_twice():
+    start_server_mock, server_mock, remote_conn_mock = get_start_sever_mock()
+    ip, port = ("127.0.0.1", 7777)
+    with patch("asyncio.start_server", start_server_mock):
+        multiplex_listener = await bind_multiplex_listener(ip, port)
+        await multiplex_listener.unbind()
+        with pytest.raises(RuntimeError):
+            await multiplex_listener.unbind()
+
+
+@given(
+    remote_address=tuples(ip_addresses(), integers(min_value=0, max_value=65535)),
+    stream_names=lists(text(min_size=1), unique=True),
+)
 async def test_handle_streams(remote_address, stream_names):
     remote_ip, remote_port = remote_address
     handled_events = {name: asyncio.Event() for name in stream_names}
+
     async def handler(stream_name: StreamName, stream: Stream):
         assert stream.name == stream_name
         assert stream.ip == remote_ip
@@ -85,16 +109,25 @@ async def test_handle_streams(remote_address, stream_names):
 
     start_server_mock, server_mock, remote_conn_mock = get_start_sever_mock()
     with patch("asyncio.start_server", start_server_mock):
-        async with bind_multiplex_listener_context("127.0.0.1", 7777) as multiplex_listener:
+        async with bind_multiplex_listener_context(
+            "127.0.0.1", 7777
+        ) as multiplex_listener:
             for stream_name in stream_names:
-                multiplex_listener.set_handler(stream_name, partial(handler, stream_name))
+                multiplex_listener.set_handler(
+                    stream_name, partial(handler, stream_name)
+                )
 
             for stream_name in stream_names:
-                reader_mock, writer_mock = remote_conn_mock.new_mock_connection(remote_ip, remote_port)
-                encoded_message = get_encoded_message(stream_name, MplexFlag.NEW_STREAM, stream_name.encode())
+                reader_mock, writer_mock = remote_conn_mock.new_mock_connection(
+                    remote_ip, remote_port
+                )
+                encoded_message = get_encoded_message(
+                    stream_name, MplexFlag.NEW_STREAM, stream_name.encode()
+                )
                 reader_mock.feed_data(encoded_message)
 
                 await asyncio.wait_for(handled_events[stream_name].wait(), timeout=0.01)
+
 
 async def test_remove_handler():
     remote_ip, remote_port = ("127.0.0.2", 7777)
@@ -109,12 +142,18 @@ async def test_remove_handler():
 
     start_server_mock, server_mock, remote_conn_mock = get_start_sever_mock()
     with patch("asyncio.start_server", start_server_mock):
-        async with bind_multiplex_listener_context("127.0.0.1", 7777) as multiplex_listener:
+        async with bind_multiplex_listener_context(
+            "127.0.0.1", 7777
+        ) as multiplex_listener:
             multiplex_listener.set_handler(stream_name, handler)
             multiplex_listener.remove_handler(stream_name)
 
-            reader_mock, writer_mock = remote_conn_mock.new_mock_connection(remote_ip, remote_port)
-            encoded_message = get_encoded_message(stream_name, MplexFlag.NEW_STREAM, stream_name.encode())
+            reader_mock, writer_mock = remote_conn_mock.new_mock_connection(
+                remote_ip, remote_port
+            )
+            encoded_message = get_encoded_message(
+                stream_name, MplexFlag.NEW_STREAM, stream_name.encode()
+            )
             reader_mock.feed_data(encoded_message)
 
             with pytest.raises(asyncio.TimeoutError):

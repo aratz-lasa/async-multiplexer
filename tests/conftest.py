@@ -11,4 +11,3 @@ def connection_mock(event_loop):
         MagicMock(spec_set=StreamWriter),
     )
     yield reader_mock, writer_mock
-
