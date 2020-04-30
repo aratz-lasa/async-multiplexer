@@ -67,7 +67,7 @@ class Stream:
         self._buffer = bytearray()
         self._read_queue = read_queue
         self._cleanup_callbak = cleanup_callback
-        self._running = False
+        self._running = True
         self._buffer_fill_tasks = []
 
     @property
@@ -83,24 +83,19 @@ class Stream:
         return self._address.name
 
     def is_closed(self):
-        return self._running
+        return not self._running
 
     async def close(self):
-        if self._running:
+        if not self._running:
             raise RuntimeError("Stream closed")
-        message = MplexMessage(
-            stream_id=self._stream_id,
-            flag=MplexFlag.CLOSE,
-            data=self._address.name.encode(),
-        )
-        await self._protocol.write_message(message)
+        await self._write_close()
         self._cleanup_callbak()
         for task in self._buffer_fill_tasks:
             task.cancel()
-        self._running = True
+        self._running = False
 
     async def write(self, data: StreamData):
-        if self._running:
+        if not self._running:
             raise RuntimeError("Stream closed")
         message = MplexMessage(
             stream_id=self._stream_id, flag=MplexFlag.MESSAGE, data=data
@@ -108,17 +103,14 @@ class Stream:
         await self._protocol.write_message(message)
 
     async def read(self, bytes_amount: int = -1) -> bytes:
-        if self._running:
+        if not self._running:
             raise RuntimeError("Stream closed")
         if not isinstance(bytes_amount, int) or bytes_amount < -1:
             raise ValueError("Invalid bytes amount")
         if bytes_amount == 0:
             return b""
-        fill_amount = math.inf if bytes_amount == -1 else bytes_amount
-        buffer_fill_task = asyncio.create_task(self._fill_buffer(fill_amount))
-        self._buffer_fill_tasks.append(buffer_fill_task)
         try:
-            await buffer_fill_task
+            await self._wait_buffer_to_fill(bytes_amount)
         except asyncio.CancelledError:
             if bytes_amount == -1:
                 return self._buffer
@@ -126,6 +118,20 @@ class Stream:
         read_byte = self._buffer[:bytes_amount]
         self._buffer = self._buffer[bytes_amount:]
         return read_byte
+
+    async def _write_close(self):
+        message = MplexMessage(
+            stream_id=self._stream_id,
+            flag=MplexFlag.CLOSE,
+            data=self._address.name.encode(),
+        )
+        await self._protocol.write_message(message)
+
+    async def _wait_buffer_to_fill(self, bytes_amount: int):
+        fill_amount = math.inf if bytes_amount == -1 else bytes_amount
+        buffer_fill_task = asyncio.create_task(self._fill_buffer(fill_amount))
+        self._buffer_fill_tasks.append(buffer_fill_task)
+        await buffer_fill_task
 
     async def _fill_buffer(self, fill_amount: Union[int, float]):
         while len(self._buffer) < fill_amount:
@@ -212,13 +218,10 @@ class Multiplexer:
                 asyncio.create_task(self._streams[message.stream_id].close())
 
     async def _make_new_stream(self, stream_name: StreamName):
-        stream_id = _get_stream_id_from_name(stream_name)
-        message = MplexMessage(
-            stream_id=stream_id, flag=MplexFlag.NEW_STREAM, data=stream_name.encode()
-        )
-        await self._protocol.write_message(message)
+        await self._write_new_stream(stream_name)
         self._stream_names.add(stream_name)
         read_queue: asyncio.Queue = asyncio.Queue()
+        stream_id = _get_stream_id_from_name(stream_name)
         self._stream_queues[stream_id] = read_queue
 
         def cleanup_callback():
@@ -234,6 +237,13 @@ class Multiplexer:
         )
         self._streams[stream_id] = stream
         return stream
+
+    async def _write_new_stream(self, stream_name: StreamName):
+        stream_id = _get_stream_id_from_name(stream_name)
+        message = MplexMessage(
+            stream_id=stream_id, flag=MplexFlag.NEW_STREAM, data=stream_name.encode()
+        )
+        await self._protocol.write_message(message)
 
 
 def _get_stream_id_from_name(stream_name: StreamName) -> StreamID:
