@@ -127,12 +127,12 @@ async def test_handle_streams(remote_address, stream_names):
                 )
                 reader_mock.feed_data(encoded_message)
 
-                await asyncio.wait_for(handled_events[stream_name].wait(), timeout=0.01)
+                await asyncio.wait_for(handled_events[stream_name].wait(), timeout=0.05)
 
 
 @given(
     remote_address=tuples(ip_addresses(), integers(min_value=0, max_value=65535)),
-    stream_names=lists(text(min_size=1), unique=True),
+    stream_names=lists(text(min_size=1), unique=True, max_size=100),
 )
 async def test_handle_streams_after_connected(remote_address, stream_names):
     remote_ip, remote_port = remote_address
@@ -163,8 +163,7 @@ async def test_handle_streams_after_connected(remote_address, stream_names):
                     stream_name, MplexFlag.NEW_STREAM, stream_name.encode()
                 )
                 reader_mock.feed_data(encoded_message)
-
-                await asyncio.wait_for(handled_events[stream_name].wait(), timeout=0.01)
+                await asyncio.wait_for(handled_events[stream_name].wait(), timeout=0.05)
 
 
 async def test_remove_handler():
@@ -195,6 +194,6 @@ async def test_remove_handler():
             reader_mock.feed_data(encoded_message)
 
             with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(handled_event.wait(), timeout=0.01)
+                await asyncio.wait_for(handled_event.wait(), timeout=0.05)
             with pytest.raises(KeyError):
                 multiplex_listener.remove_handler(stream_name)

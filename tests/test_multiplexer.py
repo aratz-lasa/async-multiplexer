@@ -1,12 +1,12 @@
-from functools import partial
-import random
 import asyncio
-from unittest.mock import patch, AsyncMock
+import random
+from functools import partial
 from typing import List
+from unittest.mock import patch, AsyncMock
 
 import pytest
 from hypothesis import given
-from hypothesis.strategies import text, binary, lists, floats, integers, one_of
+from hypothesis.strategies import text, binary, lists
 
 from async_multiplexer import open_multiplexer, open_multiplexer_context
 from async_multiplexer.multiplexer import Multiplexer, Stream, StreamName, StreamData
@@ -139,7 +139,7 @@ async def test_close_stream(mock: AsyncMock):
         with pytest.raises(RuntimeError):
             await stream.close()
         with pytest.raises(RuntimeError):
-            await asyncio.wait_for(stream.read(1), timeout=0.01)
+            await asyncio.wait_for(stream.read(1), timeout=0.05)
         with pytest.raises(RuntimeError):
             await stream.write(b"data")
 
@@ -183,7 +183,7 @@ async def test_read_zero_from_stream(mock: AsyncMock):
         encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, b"data")
         reader_mock.feed_data(encoded_message)
 
-        read_data = await asyncio.wait_for(stream.read(0), timeout=0.01)
+        read_data = await asyncio.wait_for(stream.read(0), timeout=0.05)
         assert read_data == b""
 
 
@@ -226,7 +226,7 @@ async def test_read_from_multiple_streams(
             reader_mock.feed_data(encoded_message)
 
             with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(streams[non_receiver].read(1), timeout=0.01)
+                await asyncio.wait_for(streams[non_receiver].read(1), timeout=0.05)
 
             assert await streams[receiver].read(len(data)) == data
 
@@ -243,7 +243,7 @@ async def test_read_invalid_flag():
             reader_mock.feed_data(encoded_message)
 
             with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(stream.read(1), timeout=0.01)
+                await asyncio.wait_for(stream.read(1), timeout=0.05)
 
 
 async def test_read_close_flag():
@@ -257,14 +257,14 @@ async def test_read_close_flag():
             encoded_message = get_encoded_message(stream_name, MplexFlag.CLOSE, b"")
             reader_mock.feed_data(encoded_message)
 
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.05)
             # 'read' must be first so that it gives control back to event_loop
             with pytest.raises(RuntimeError):
                 await stream.close()
             with pytest.raises(RuntimeError):
                 await stream.write(b"data")
             with pytest.raises(RuntimeError):
-                await asyncio.wait_for(stream.read(1), timeout=0.01)
+                await asyncio.wait_for(stream.read(1), timeout=0.05)
 
 
 async def test_read_until_close():
@@ -281,7 +281,7 @@ async def test_read_until_close():
             encoded_message = get_encoded_message(stream_name, MplexFlag.CLOSE, b"")
             reader_mock.feed_data(encoded_message)
 
-            read_data = await asyncio.wait_for(stream.read(), timeout=0.01)
+            read_data = await asyncio.wait_for(stream.read(), timeout=0.05)
             assert read_data == data
 
 
@@ -321,7 +321,7 @@ async def test_handle_new_stream(stream_names):
                 )
                 reader_mock.feed_data(encoded_message)
 
-                await asyncio.wait_for(handled_events[stream_name].wait(), timeout=0.01)
+                await asyncio.wait_for(handled_events[stream_name].wait(), timeout=0.05)
 
 
 async def test_remove_handler():
@@ -347,6 +347,22 @@ async def test_remove_handler():
             reader_mock.feed_data(encoded_message)
 
             with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(handled_event.wait(), timeout=0.01)
+                await asyncio.wait_for(handled_event.wait(), timeout=0.05)
             with pytest.raises(KeyError):
                 multiplexer.remove_handler(stream_name)
+
+
+@given(data=binary())
+async def test_readline(data: bytes):
+    ip, port = ("127.0.0.1", 7777)
+    reader_mock, writer_mock = get_connection_mock(ip, port)
+    with patch("asyncio.open_connection", return_value=(reader_mock, writer_mock)):
+        multiplexer = await open_multiplexer(ip, port)
+        stream_name = "stream.1"
+        stream = await multiplexer.multiplex(stream_name)
+
+        data = data + b"\n" + data
+        encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, data)
+        reader_mock.feed_data(encoded_message)
+
+        assert await stream.readline() == data.split(b"\n")[0] + b"\n"

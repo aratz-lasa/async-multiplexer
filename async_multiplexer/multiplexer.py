@@ -102,6 +102,9 @@ class Stream:
             raise RuntimeError("Stream closed")
         return await self._reader.read(bytes_amount)
 
+    async def readline(self) -> bytes:
+        return await self._reader.readline()
+
     async def _write_close(self):
         message = MplexMessage(
             stream_id=self._stream_id,
