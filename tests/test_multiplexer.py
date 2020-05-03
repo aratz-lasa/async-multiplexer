@@ -383,3 +383,21 @@ async def test_readuntil(data: bytes):
         reader_mock.feed_data(encoded_message)
 
         assert await stream.readuntil(separator) == data.split(separator)[0] + separator
+
+
+@given(data=binary(min_size=1))
+async def test_readexactly(data: bytes):
+    ip, port = ("127.0.0.1", 7777)
+    reader_mock, writer_mock = get_connection_mock(ip, port)
+    with patch("asyncio.open_connection", return_value=(reader_mock, writer_mock)):
+        multiplexer = await open_multiplexer(ip, port)
+        stream_name = "stream.1"
+        stream = await multiplexer.multiplex(stream_name)
+
+        read_amount = random.randint(0, len(data) - 1)
+
+        encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, data)
+        reader_mock.feed_data(encoded_message)
+
+        print(data, len(data), read_amount)
+        assert await stream.readexactly(read_amount) == data[:read_amount]

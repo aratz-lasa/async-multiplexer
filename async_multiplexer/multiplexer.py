@@ -108,6 +108,9 @@ class Stream:
     async def readuntil(self, separator: bytes = b"\n") -> bytes:
         return await self._reader.readuntil(separator)
 
+    async def readexactly(self, read_amount: int) -> bytes:
+        return await self._reader.readexactly(read_amount)
+
     async def _write_close(self):
         message = MplexMessage(
             stream_id=self._stream_id,
