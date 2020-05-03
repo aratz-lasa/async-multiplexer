@@ -209,26 +209,6 @@ async def test_read_from_one_stream(data: StreamData):
                 )
 
 
-@given(data=binary(min_size=1))
-async def test_read_too_much_from_stream(data: StreamData):
-    ip, port = ("127.0.0.1", 7777)
-    reader_mock, writer_mock = get_connection_mock(ip, port)
-    with patch("asyncio.open_connection", return_value=(reader_mock, writer_mock)):
-        async with open_multiplexer_context(ip, port) as multiplexer:
-            stream_name = "stream.1"
-            stream = await multiplexer.multiplex(stream_name)
-
-            encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, data)
-            reader_mock.feed_data(encoded_message)
-
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(stream.read(len(data) + 1), timeout=0.01)
-
-            reader_mock.feed_data(encoded_message)
-            read_data = await asyncio.wait_for(stream.read(len(data) + 1), timeout=0.01)
-            assert read_data == data + data[:1]
-
-
 @given(stream_names=lists(text(min_size=1), unique=True, min_size=2), data=binary())
 async def test_read_from_multiple_streams(
     stream_names: List[StreamName], data: StreamData
@@ -303,19 +283,6 @@ async def test_read_until_close():
 
             read_data = await asyncio.wait_for(stream.read(), timeout=0.01)
             assert read_data == data
-
-
-@given(one_of(integers(max_value=-2), floats(),))
-async def test_read_invalid_bytes_amount(bytes_amount):
-    ip, port = ("127.0.0.1", 7777)
-    reader_mock, writer_mock = get_connection_mock(ip, port)
-    with patch("asyncio.open_connection", return_value=(reader_mock, writer_mock)):
-        async with open_multiplexer_context(ip, port) as multiplexer:
-            stream_name = "stream.1"
-            stream = await multiplexer.multiplex(stream_name)
-
-            with pytest.raises(ValueError):
-                await stream.read(bytes_amount)
 
 
 async def test_close_from_multiplexer():
