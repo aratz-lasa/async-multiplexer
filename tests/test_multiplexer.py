@@ -357,15 +357,18 @@ async def test_readline(data: bytes):
     ip, port = ("127.0.0.1", 7777)
     reader_mock, writer_mock = get_connection_mock(ip, port)
     with patch("asyncio.open_connection", return_value=(reader_mock, writer_mock)):
-        multiplexer = await open_multiplexer(ip, port)
-        stream_name = "stream.1"
-        stream = await multiplexer.multiplex(stream_name)
+        async with open_multiplexer_context(ip, port) as multiplexer:
+            stream_name = "stream.1"
+            stream = await multiplexer.multiplex(stream_name)
 
-        data = data + b"\n" + data
-        encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, data)
-        reader_mock.feed_data(encoded_message)
+            data = data + b"\n" + data
+            encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, data)
+            reader_mock.feed_data(encoded_message)
 
-        assert await stream.readline() == data.split(b"\n")[0] + b"\n"
+            assert await stream.readline() == data.split(b"\n")[0] + b"\n"
+
+        with pytest.raises(RuntimeError):
+            await stream.readline()
 
 
 @given(data=binary(min_size=1))
@@ -373,16 +376,22 @@ async def test_readuntil(data: bytes):
     ip, port = ("127.0.0.1", 7777)
     reader_mock, writer_mock = get_connection_mock(ip, port)
     with patch("asyncio.open_connection", return_value=(reader_mock, writer_mock)):
-        multiplexer = await open_multiplexer(ip, port)
-        stream_name = "stream.1"
-        stream = await multiplexer.multiplex(stream_name)
+        async with open_multiplexer_context(ip, port) as multiplexer:
+            stream_name = "stream.1"
+            stream = await multiplexer.multiplex(stream_name)
 
-        separator_index = random.randint(0, len(data) - 1)
-        separator = data[separator_index : separator_index + 1]
-        encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, data)
-        reader_mock.feed_data(encoded_message)
+            separator_index = random.randint(0, len(data) - 1)
+            separator = data[separator_index : separator_index + 1]
+            encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, data)
+            reader_mock.feed_data(encoded_message)
 
-        assert await stream.readuntil(separator) == data.split(separator)[0] + separator
+            assert (
+                await stream.readuntil(separator)
+                == data.split(separator)[0] + separator
+            )
+
+        with pytest.raises(RuntimeError):
+            await stream.readuntil(separator)
 
 
 @given(data=binary(min_size=1))
@@ -390,14 +399,47 @@ async def test_readexactly(data: bytes):
     ip, port = ("127.0.0.1", 7777)
     reader_mock, writer_mock = get_connection_mock(ip, port)
     with patch("asyncio.open_connection", return_value=(reader_mock, writer_mock)):
-        multiplexer = await open_multiplexer(ip, port)
-        stream_name = "stream.1"
-        stream = await multiplexer.multiplex(stream_name)
+        async with open_multiplexer_context(ip, port) as multiplexer:
+            stream_name = "stream.1"
+            stream = await multiplexer.multiplex(stream_name)
 
-        read_amount = random.randint(0, len(data) - 1)
+            read_amount = random.randint(0, len(data) - 1)
 
-        encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, data)
-        reader_mock.feed_data(encoded_message)
+            encoded_message = get_encoded_message(stream_name, MplexFlag.MESSAGE, data)
+            reader_mock.feed_data(encoded_message)
 
-        print(data, len(data), read_amount)
-        assert await stream.readexactly(read_amount) == data[:read_amount]
+            assert await stream.readexactly(read_amount) == data[:read_amount]
+
+        with pytest.raises(RuntimeError):
+            await stream.readexactly(read_amount)
+
+
+@pytest.mark.skip(reason="Not found the way to mock asynciterator")
+async def test_iterate_read(data: bytes):
+    ip, port = ("127.0.0.1", 7777)
+    reader_mock, writer_mock = get_connection_mock(ip, port)
+    with patch("asyncio.open_connection", return_value=(reader_mock, writer_mock)):
+        async with open_multiplexer_context(ip, port) as multiplexer:
+            stream_name = "stream.1"
+            stream = await multiplexer.multiplex(stream_name)
+
+            line_amount = random.randint(1, len(data))
+            data_with_lines = b"\n".join([data for _ in range(line_amount)])
+            chunked_data = data_with_lines.split(b"\n")
+
+            encoded_message = get_encoded_message(
+                stream_name, MplexFlag.MESSAGE, data_with_lines
+            )
+            reader_mock.feed_data(encoded_message)
+
+            i = 0
+            async for line in stream:
+                print(line, i, len(chunked_data))
+                assert line == chunked_data[i] + b"\n"
+                i += 1
+                if i > len(chunked_data):
+                    break
+
+        with pytest.raises(RuntimeError):
+            async for line in stream:
+                print(line)

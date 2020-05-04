@@ -1,10 +1,9 @@
-from dataclasses import dataclass
-import math
-from typing import Callable, Awaitable, List, Union, Dict, Set
-from contextlib import asynccontextmanager
 import asyncio
 from asyncio import StreamWriter, StreamReader
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from hashlib import sha256
+from typing import Callable, Awaitable, Dict, Set
 
 from async_multiplexer.protocol import (
     MplexFlag,
@@ -103,13 +102,24 @@ class Stream:
         return await self._reader.read(bytes_amount)
 
     async def readline(self) -> bytes:
+        if not self._running:
+            raise RuntimeError("Stream closed")
         return await self._reader.readline()
 
     async def readuntil(self, separator: bytes = b"\n") -> bytes:
+        if not self._running:
+            raise RuntimeError("Stream closed")
         return await self._reader.readuntil(separator)
 
     async def readexactly(self, read_amount: int) -> bytes:
+        if not self._running:
+            raise RuntimeError("Stream closed")
         return await self._reader.readexactly(read_amount)
+
+    def __aiter__(self):
+        if not self._running:
+            raise RuntimeError("Stream closed")
+        return self._reader
 
     async def _write_close(self):
         message = MplexMessage(

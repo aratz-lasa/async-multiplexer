@@ -1,7 +1,7 @@
 from asyncio.streams import StreamReader, StreamWriter
 from hashlib import sha256
 from typing import Tuple
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import uvarint
 
@@ -42,11 +42,13 @@ def get_message(
 
 
 def get_connection_mock(ip, port) -> Tuple[MagicMock, MagicMock]:
+    reader = StreamReader()
     reader_mock, writer_mock = (
-        MagicMock(spec_set=StreamReader, wraps=StreamReader()),
+        MagicMock(spec_set=StreamReader, wraps=reader),
         MagicMock(spec_set=StreamWriter),
     )
     writer_mock.get_extra_info.return_value = (ip, port)
+    reader_mock.__anext__ = AsyncMock(spec_set=reader.__anext__, wraps=reader.__anext__)
     return reader_mock, writer_mock
 
 
