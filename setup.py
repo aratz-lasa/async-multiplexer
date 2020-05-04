@@ -18,7 +18,7 @@ extras_require = {
 
 setuptools.setup(
     name="async_multiplexer",
-    version="0.0.3",
+    version="0.1.0",
     author="Aratz M. Lasa",
     author_email="aratz.m.lasa@gmail.com",
     description="Asyncio TCP Multiplexer",
